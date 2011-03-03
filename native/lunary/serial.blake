@@ -1,0 +1,12 @@
+return {
+	type = 'lua_module';
+	files = {
+		"serial.lua",
+		{
+			dirs = {source="serial", build="serial", install="serial"},
+			"util.lua",
+		},
+	};
+}
+
+-- vi: filetype=lua
