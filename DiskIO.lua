@@ -30,12 +30,16 @@ function DiskIO:close()
 	return self
 end
 
-function DiskIO:read(sector)
+function DiskIO:read(sector, count)
+	count = count or 1
 	assert(self.fd:seek("set", sector * 512))
-	return assert(self.fd:read(512))
+	local d = self.fd:read(512 * count)
+	assert(d:len() == 512 * count)
+	return d
 end
 
 function DiskIO:write(sector, value)
 	assert(self.fd:seek("set", sector * 512))
-	assert(value:len() == 512)
+	assert((value:len() % 512) == 0)
+	assert(self.fd:write(value))
 end

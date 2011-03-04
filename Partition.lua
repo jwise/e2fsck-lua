@@ -74,6 +74,8 @@ function PartitionTable:read()
 		
 		mbr = false
 	end
+	
+	return self
 end
 
 Partition = {}
@@ -85,17 +87,22 @@ function Partition:new(o)
 	assert(o.start)
 	assert(o.size)
 	
+	o.BYTES_PER_SECTOR = o.disk.BYTES_PER_SECTOR
+	
 	setmetatable(o, self)
 	self.__index = self
 	return o
 end
 
-function Partition:read(sector)
-	assert(sector < self.size)
-	return self.disk:read(self.start + sector)
+function Partition:read(sector, nsectors)
+	nsectors = nsectors or 1
+	assert((sector + nsectors) <= self.size)
+	return self.disk:read(self.start + sector, nsectors)
 end
 
 function Partition:write(sector, value)
-	assert(sector < self.size)
+	assert((value:len() % 512) == 0)
+	local nsectors = value:len() / 512
+	assert((sector + nsectors) <= self.size)
 	return self.disk:write(self.start + sector, value)
 end
