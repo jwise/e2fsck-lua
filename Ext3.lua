@@ -165,6 +165,7 @@ function Ext3:open()
 	-- Suck in the block group descriptor table.
 	local sbend = self.sbsector * self.disk.BYTES_PER_SECTOR + 1024
 	local bgdtblock = ceildiv(sbend, self.block_size)
+	self.startblock = bgdtblock-1
 	
 	local nbgs = ceildiv(self.blocks_count, self.blocks_per_group)
 	local bgdtsz = Ext3.formats.bgd.length * nbgs
@@ -298,4 +299,52 @@ function Ext3:balloc(bnum)
 	local b = bit.band(raw:byte(bbyte+1), bit.lshift(1, bbit))
 
 	return b ~= 0
+end
+
+function Ext3:ball(inum)
+	local bondisk = {}
+	for bgn,bg in pairs(self.blockgroups) do
+		local bnum = bgn * self.blocks_per_group + self.startblock
+		local subnum = 0
+		
+		local blocks = ceildiv(self.blocks_per_group, 8 * self.block_size)
+		local s = ""
+		
+		for b = bg.block_bitmap,(bg.block_bitmap+blocks-1) do
+			s = s .. self:readblock(b)
+		end
+		while s ~= "" and subnum < self.blocks_per_group do
+			c = s:byte()
+			
+			if bit.band(c, 0x01) ~= 0 then bondisk[bnum] = true end
+			bnum = bnum + 1
+			
+			if bit.band(c, 0x02) ~= 0 then bondisk[bnum] = true end
+			bnum = bnum + 1
+			
+			if bit.band(c, 0x04) ~= 0 then bondisk[bnum] = true end
+			bnum = bnum + 1
+			
+			if bit.band(c, 0x08) ~= 0 then bondisk[bnum] = true end
+			bnum = bnum + 1
+			
+			if bit.band(c, 0x10) ~= 0 then bondisk[bnum] = true end
+			bnum = bnum + 1
+			
+			if bit.band(c, 0x20) ~= 0 then bondisk[bnum] = true end
+			bnum = bnum + 1
+			
+			if bit.band(c, 0x40) ~= 0 then bondisk[bnum] = true end
+			bnum = bnum + 1
+			
+			if bit.band(c, 0x80) ~= 0 then bondisk[bnum] = true end
+			bnum = bnum + 1
+			
+			subnum = subnum + 8
+			
+			s = s:sub(2)
+		end
+	end
+	
+	return bondisk
 end

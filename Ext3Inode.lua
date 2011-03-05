@@ -108,6 +108,8 @@ function Ext3.Inode:allblocks()
 	local bpb = self.fs.block_size / 4
 	local bs = {}
 	
+	if self.mode.IFLNK and self.size <= 60 then return {} end
+	
 	for v = 1,Ext3.Inode.Blocks.INDIRECT1 do
 		if self.blocks[v] ~= 0 then bs[self.blocks[v]] = true end
 	end
@@ -136,7 +138,7 @@ function Ext3.Inode:allblocks()
 				
 				bs[iblock1[i1]] = true
 				
-				for i2 = 1,bpb+1 do
+				for i2 = 1,bpb do
 					if iblock2[i2] ~= 0 then bs[iblock2[i2]] = true end
 				end
 			end
