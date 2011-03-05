@@ -2,6 +2,8 @@ require"Verbose"
 
 Fsck = {}
 
+Fsck.modified = false
+
 function Fsck.printpath(path)
 	s="/"
 	for k,v in ipairs(path) do
@@ -22,15 +24,32 @@ function Fsck.pass1(e)
 		
 		vprint(Fsck.printpath(path) .. " ...")
 		
-		local dir = ino:file():directory()
-		for name,namei in pairs(dir) do
-			if name == "." then
+		local f = ino:file()
+		while true do
+			local pos = f:seek()
+			local de = f:readdir()
+			if de == nil then break end
+			
+			local name,namei = de.name, de.inode
+			
+			if de.name_len == 0 or name:byte(1) == 0 then -- do nothing
+			elseif name == "." then
 				if namei ~= inum then
-					error("incorrect .")
+					de.inode = inum
+					f:seek(pos)
+					f:writedir(de)
+					
+					print("inode #"..inum.." has incorrect . reference (was #"..namei.."); repaired")
+					Fsck.modified = true
 				end
 			elseif name == ".." then
 				if namei ~= ipath[#ipath - 1] then
-					error("incorrect ..")
+					de.inode = ipath[#ipath - 1]
+					f:seek(pos)
+					f:writedir(de)
+				
+					print("inode #"..inum.." has incorrect .. reference (was #"..namei..", expected #"..ipath[#ipath - 1].."); repaired")
+					Fsck.modified = true
 				end
 			else
 				table.insert(path, name)
@@ -82,7 +101,8 @@ function Fsck.pass2(e)
 	
 	for k,v in pairs(ifound) do
 		if not iondisk[k] and k >= Ext3.inodes.FIRST_GOOD then
-			error("inode "..k.." in memory, but not marked as allocated")
+			print("inode "..k.." in memory, but not marked as allocated; repaired")
+			e:ialloc(k, true)
 		end
 	end
 	
@@ -126,7 +146,13 @@ function Fsck.pass3(e)
 	for inum,count in pairs(ilinks) do
 		local ino = e:inode(inum)
 		if ino.links_count ~= count then
-			error("inode "..k.." has inconsistent link count (expected "..count..", got "..ino.links_count..")")
+			local bad = ino.links_count
+			
+			ino.links_count = count
+			ino:write()
+			
+			print("inode "..inum.." has inconsistent link count (expected "..count..", got "..bad.."); repaired")
+			Fsck.modified = true
 		end
 	end
 end
@@ -227,4 +253,8 @@ function Fsck.fsck(e)
 	Fsck.pass2(e)
 	Fsck.pass3(e)
 	Fsck.pass4(e)
+	
+	if Fsck.modified then
+		print"filesystem was modified; run system fsck to verify"
+	end
 end

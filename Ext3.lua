@@ -116,7 +116,7 @@ Ext3.formats.inode = {
 	{'dtime', 'uint32', 'le'},
 	{'gid', 'uint16', 'le'},
 	{'links_count', 'uint16', 'le'},
-	{'blocks', 'uint32', 'le'},
+	{'nblocks', 'uint32', 'le'},
 	{'flags', 'uint32', 'le'},
 	{'osd1', 'uint32', 'le'},
 	{'blocks', 'array', 15, 'uint32', 'le'},
@@ -221,7 +221,32 @@ function Ext3:inode(inum)
 	return Ext3.Inode:new(idata)
 end
 
-function Ext3:ialloc(inum)
+function strreplace(instr, substr, ofs)
+	assert(ofs < instr:len())
+	
+	return instr:sub(1, ofs) ..
+	       substr ..
+	       instr:sub(ofs + substr:len() + 1)
+end
+
+function Ext3:inodewrite(inum, inode)
+	assert(inum >= 1 and inum < self.inodes_count)
+	
+	local bgn = (inum - 1) / self.inodes_per_group
+	local istart = self.blockgroups[bgn].inode_table
+	local iofs = ((inum - 1) % self.inodes_per_group) * self.inode_size
+	local iblock = istart + (iofs / self.block_size)
+
+	local blkraw = self:readblock(iblock)
+	local inoraw = serial.serialize.struct(inode, Ext3.formats.inode)
+	
+	-- Patch together the new data.
+	local blkdat = strreplace(blkraw, inoraw, iofs % self.block_size)
+	assert(blkdat:len() == self.block_size)
+	self:writeblock(iblock, blkdat)
+end
+
+function Ext3:ialloc(inum, val)
 	assert(inum >= 1 and inum < self.inodes_count)
 
 	local bgn = (inum - 1) / self.inodes_per_group
@@ -232,9 +257,27 @@ function Ext3:ialloc(inum)
 	local ibit = iofs % 8
 
 	local raw = self:readblock(iblock)
-	local b = bit.band(raw:byte(ibyte+1), bit.lshift(1, ibit))
-
-	return b ~= 0
+	if val == nil then
+		local b = bit.band(raw:byte(ibyte+1), bit.lshift(1, ibit))
+	
+		return b ~= 0
+	elseif val == true then
+		local b = bit.bor(raw:byte(ibyte+1), bit.lshift(1, ibit))
+		local bs = string.char(b)
+		local newraw = strreplace(raw, bs, ibyte)
+		
+		self:writeblock(iblock, newraw)
+		
+		return true
+	elseif val == false then
+		local b = bit.band(raw:byte(ibyte+1), bit.bnot(bit.lshift(1, ibit)))
+		local bs = string.char(b)
+		local newraw = strreplace(raw, bs, ibyte)
+		
+		self:writeblock(iblock, newraw)
+		
+		return false
+	end
 end
 
 function Ext3:iall(inum)

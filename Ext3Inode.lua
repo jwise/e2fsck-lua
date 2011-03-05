@@ -18,10 +18,6 @@ function Ext3.Inode:new(o)
 	       + (o.mode.x2000 and 2 or 0)
 	       + (o.mode.x4000 and 4 or 0)
 	       + (o.mode.x8000 and 8 or 0)
-	o.mode.x1000 = nil
-	o.mode.x2000 = nil
-	o.mode.x4000 = nil
-	o.mode.x8000 = nil
 	
 	    if format == 0x1 then o.mode.IFIFO = true
 	elseif format == 0x2 then o.mode.IFCHR = true
@@ -37,6 +33,10 @@ function Ext3.Inode:new(o)
 	setmetatable(o, self)
 	self.__index = self
 	return o
+end
+
+function Ext3.Inode:write()
+	self.fs:inodewrite(self.inum, self)
 end
 
 function Ext3.Inode:block(n)
@@ -264,15 +264,21 @@ function Ext3.File:write(s)
 		local strim = s:sub(1, nbytes)
 		s = s:sub(nbytes+1)
 		
-		-- Patch together the new data.
-		local blkdat = ld:sub(1, self.pos % self.fs.block_size) ..
-		               strim ..
-		               ld:sub(self.pos % self.fs.block_size + nbytes + 1)
+		-- strreplace defined in Ext3.lua
+		local blkdat = strreplace(ld, strim, self.pos % self.fs.block_size)
+		
 		assert(blkdat:len() == self.fs.block_size)
 		self.fs:writeblock(block, blkdat)
 		
 		self.pos = self.pos + nbytes
 	end
+end
+
+function Ext3.File:seek(pos)
+	if pos == nil then return self.pos end
+	
+	assert(pos < self.size)
+	self.pos = pos
 end
 
 -- For compatibility with the 'serial' stream interface.
@@ -281,21 +287,27 @@ function Ext3.File:length()
 	return self.size - self.pos
 end
 
-function Ext3.File:readdir()
-	local dirent = function(value, declare_field)
-		declare_field('inode', 'uint32', 'le')
-		declare_field('rec_len', 'uint16', 'le')
-		declare_field('name_len', 'uint8')
-		declare_field('file_type', 'uint8')
-		declare_field('name', 'bytes', value.name_len)
-		declare_field('padding', 'bytes', value.rec_len - value.name_len - 8)
-	end
+Ext3.File.dirent = function(value, declare_field)
+	declare_field('inode', 'uint32', 'le')
+	declare_field('rec_len', 'uint16', 'le')
+	declare_field('name_len', 'uint8')
+	declare_field('file_type', 'uint8')
+	declare_field('name', 'bytes', value.name_len)
+	declare_field('padding', 'bytes', value.rec_len - value.name_len - 8)
+end
+
+function Ext3.File:writedir(de)
+	local d = serial.serialize.fstruct(de, Ext3.File.dirent)
 	
+	self:write(d)
+end
+
+function Ext3.File:readdir()
 	if self.size == self.pos then
 		return nil
 	end
 	
-	local d = serial.read.fstruct(self, dirent)
+	local d = serial.read.fstruct(self, Ext3.File.dirent)
 	if d.name_len == 0 then
 		return nil
 	end
