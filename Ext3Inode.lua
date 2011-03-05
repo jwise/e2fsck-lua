@@ -55,8 +55,8 @@ function Ext3.Inode:block(n)
 		local rblock = self.fs:readblock(i1)
 		local block = serial.read.array(serial.buffer(rblock), bpb, 'uint32', 'le')
 		
-		if blocks[n+1] == 0 then return nil end
-		return blocks[n+1]
+		if self.blocks[n+1] == 0 then return nil end
+		return self.blocks[n+1]
 	end
 	
 	n = n - bpb
@@ -67,14 +67,14 @@ function Ext3.Inode:block(n)
 		local rblock = self.fs:readblock(i1)
 		local block = serial.read.array(serial.buffer(rblock), bpb, 'uint32', 'le')
 		
-		if blocks[n/bpb+1] == 0 then return nil end
-		local i2 = blocks[n/bpb+1]
+		if self.blocks[n/bpb+1] == 0 then return nil end
+		local i2 = self.blocks[n/bpb+1]
 		
 		rblock = self.fs:readblock(i2)
 		block = serial.read.array(serial.buffer(rblock), bpb, 'uint32', 'le')
 		
-		if blocks[n%bpb+1] == 0 then return nil end
-		return blocks[n%bpb+1]
+		if self.blocks[n%bpb+1] == 0 then return nil end
+		return self.blocks[n%bpb+1]
 	end
 	
 	n = n - bpb*bpb
@@ -85,20 +85,20 @@ function Ext3.Inode:block(n)
 		local rblock = self.fs:readblock(i1)
 		local block = serial.read.array(serial.buffer(rblock), bpb, 'uint32', 'le')
 		
-		if blocks[n/(bpb*bpb)+1] == 0 then return nil end
-		local i2 = blocks[n/(bpb*bpb)+1]
+		if self.blocks[n/(bpb*bpb)+1] == 0 then return nil end
+		local i2 = self.blocks[n/(bpb*bpb)+1]
 		
 		rblock = self.fs:readblock(i2)
 		block = serial.read.array(serial.buffer(rblock), bpb, 'uint32', 'le')
 		
-		if blocks[(n/bpb)%bpb + 1] == 0 then return nil end
-		local i3 = blocks[(n/bpb)%bpb + 1]
+		if self.blocks[(n/bpb)%bpb + 1] == 0 then return nil end
+		local i3 = self.blocks[(n/bpb)%bpb + 1]
 		
 		rblock = self.fs:readblock(i3)
 		block = serial.read.array(serial.buffer(rblock), bpb, 'uint32', 'le')
 		
-		if blocks[n%bpb+1] == 0 then return nil end
-		return blocks[n%bpb+1]
+		if self.blocks[n%bpb+1] == 0 then return nil end
+		return self.blocks[n%bpb+1]
 	end
 	
 	error("wow, what a colossal file!")
@@ -173,4 +173,95 @@ function Ext3.Inode:allblocks()
 	end
 	
 	return bs
+end
+
+function Ext3.Inode:file()
+	return Ext3.File:new{i = self, fs = self.fs}
+end
+
+Ext3.File = {}
+
+function Ext3.File:new(o)
+	o = o or {}
+	
+	assert(o.i)
+	assert(o.fs)
+	
+	o.pos = 0
+	o.size = o.i.size
+
+	setmetatable(o, self)
+	self.__index = self
+	return o
+end
+
+function Ext3.File:read(bytes)
+	d = ""
+	
+	while bytes ~= 0 do
+		local blockofs = self.pos % self.fs.block_size
+		local blockleft = self.fs.block_size - blockofs
+		local szleft = self.size - self.pos
+		local nbytes = bytes
+		
+		if nbytes > blockleft then nbytes = blockleft end
+		if nbytes > szleft then nbytes = szleft end
+		
+		if nbytes == 0 then
+			return d
+		end
+		
+		local block = self.i:block(self.pos / self.fs.block_size)
+		local ld
+		if block == nil then
+			ld = string.rep(string.char(0), self.fs.block_size)
+		else
+			ld = self.fs:readblock(self.i:block(self.pos / self.fs.block_size))
+		end
+		ld = ld:sub((self.pos % self.fs.block_size) + 1,
+		            (self.pos + nbytes - 1) % self.fs.block_size + 1)
+		
+		d = d .. ld
+		self.pos = self.pos + nbytes
+		bytes = bytes - nbytes
+	end
+	return d
+end
+
+-- For compatibility with the 'serial' stream interface.
+Ext3.File.receive = Ext3.File.read
+function Ext3.File:length()
+	return self.size - self.pos
+end
+
+function Ext3.File:readdir()
+	local dirent = function(value, declare_field)
+		declare_field('inode', 'uint32', 'le')
+		declare_field('rec_len', 'uint16', 'le')
+		declare_field('name_len', 'uint8')
+		declare_field('file_type', 'uint8')
+		declare_field('name', 'bytes', value.name_len)
+		declare_field('padding', 'bytes', value.rec_len - value.name_len - 8)
+	end
+	
+	if self.size == self.pos then
+		return nil
+	end
+	
+	return serial.read.fstruct(self, dirent)
+end
+
+function Ext3.File:directory()
+	if self._directory then return self._directory end
+	
+	self._directory = {}
+	
+	while true do
+		local d = self:readdir()
+		if d == nil then break end
+		
+		self._directory[d.name] = d.inode
+	end
+	
+	return self._directory
 end
