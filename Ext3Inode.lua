@@ -179,6 +179,17 @@ function Ext3.Inode:file()
 	return Ext3.File:new{i = self, fs = self.fs}
 end
 
+function Ext3.Inode:target()
+	assert(self.mode.IFLNK)
+	
+	if self.size > 60 then
+		return self:file():read(self.size)
+	end
+	
+	s = serial.serialize.array(self.blocks, 15, 'uint32', 'le'):gsub("%z.*", "")
+	return s
+end
+
 Ext3.File = {}
 
 function Ext3.File:new(o)
@@ -248,7 +259,16 @@ function Ext3.File:readdir()
 		return nil
 	end
 	
-	return serial.read.fstruct(self, dirent)
+	local d = serial.read.fstruct(self, dirent)
+	if d.name_len == 0 then
+		return nil
+	end
+	
+	if d.name:byte(1) == 0 then
+		return nil
+	end
+	
+	return d
 end
 
 function Ext3.File:directory()
@@ -258,9 +278,9 @@ function Ext3.File:directory()
 	
 	while true do
 		local d = self:readdir()
-		if d == nil then break end
+		if self.size == self.pos then break end
 		
-		self._directory[d.name] = d.inode
+		if d then self._directory[d.name] = d.inode end
 	end
 	
 	return self._directory
