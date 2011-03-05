@@ -68,6 +68,7 @@ end
 
 function Fsck.linki(e, lostfound, inum)
 	local ino = e:inode(lostfound)
+	local ino2 = e:inode(inum)
 	ino.flags = bit.band(ino.flags, bit.bnot(0x1000)) -- Clear the btree bit.
 	local f = ino:file()
 	local iname = "#"..inum
@@ -82,14 +83,14 @@ function Fsck.linki(e, lostfound, inum)
 	}
 	
 	-- Case on the filetype.
-	    if ino.mode.IFIFO  then newde.file_type = 5
-	elseif ino.mode.IFCHR  then newde.file_type = 3
-	elseif ino.mode.IFDIR  then newde.file_type = 2
-	elseif ino.mode.IFBLK  then newde.file_type = 4
-	elseif ino.mode.IFREG  then newde.file_type = 1
-	elseif ino.mode.IFLNK  then newde.file_type = 7
-	elseif ino.mode.IFSOCK then newde.file_type = 6
-	else                        newde.file_type = 0
+	    if ino2.mode.IFIFO  then newde.file_type = 5
+	elseif ino2.mode.IFCHR  then newde.file_type = 3
+	elseif ino2.mode.IFDIR  then newde.file_type = 2
+	elseif ino2.mode.IFBLK  then newde.file_type = 4
+	elseif ino2.mode.IFREG  then newde.file_type = 1
+	elseif ino2.mode.IFLNK  then newde.file_type = 7
+	elseif ino2.mode.IFSOCK then newde.file_type = 6
+	else                         newde.file_type = 0
 	end
 	
 	while true do
@@ -107,6 +108,7 @@ function Fsck.linki(e, lostfound, inum)
 			de.name = ""
 			de.padding = string.rep(string.char(0), de.rec_len - 8)
 			
+			f:seek(pos)
 			f:writedir(newde)
 			f:writedir(de)
 			
