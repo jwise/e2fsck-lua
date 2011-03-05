@@ -276,9 +276,8 @@ function Ext3.File:directory()
 	
 	self._directory = {}
 	
-	while true do
+	while self.size ~= self.pos do
 		local d = self:readdir()
-		if self.size == self.pos then break end
 		
 		if d then self._directory[d.name] = d.inode end
 	end
