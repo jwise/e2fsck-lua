@@ -13,6 +13,7 @@ Ext3.inodes.ACL_IDX = 3
 Ext3.inodes.ACL_DATA = 4
 Ext3.inodes.BOOT_LOADER = 5
 Ext3.inodes.UNDEL_DIR = 6
+Ext3.inodes.FIRST_GOOD = 11
 
 Ext3.formats = {}
 
@@ -233,6 +234,54 @@ function Ext3:ialloc(inum)
 	local b = bit.band(raw:byte(ibyte+1), bit.lshift(1, ibit))
 
 	return b ~= 0
+end
+
+function Ext3:iall(inum)
+	local iondisk = {}
+	for bgn,bg in pairs(self.blockgroups) do
+		local inum = bgn * self.inodes_per_group + 1
+		local subnum = 0
+		
+		local blocks = ceildiv(self.inodes_per_group, 8 * self.block_size)
+		local s = ""
+		
+		for b = bg.inode_bitmap,(bg.inode_bitmap+blocks-1) do
+			s = s .. self:readblock(b)
+		end
+		while s ~= "" and subnum < self.inodes_per_group do
+			c = s:byte()
+			
+			if bit.band(c, 0x01) ~= 0 then iondisk[inum] = true end
+			inum = inum + 1
+			
+			if bit.band(c, 0x02) ~= 0 then iondisk[inum] = true end
+			inum = inum + 1
+			
+			if bit.band(c, 0x04) ~= 0 then iondisk[inum] = true end
+			inum = inum + 1
+			
+			if bit.band(c, 0x08) ~= 0 then iondisk[inum] = true end
+			inum = inum + 1
+			
+			if bit.band(c, 0x10) ~= 0 then iondisk[inum] = true end
+			inum = inum + 1
+			
+			if bit.band(c, 0x20) ~= 0 then iondisk[inum] = true end
+			inum = inum + 1
+			
+			if bit.band(c, 0x40) ~= 0 then iondisk[inum] = true end
+			inum = inum + 1
+			
+			if bit.band(c, 0x80) ~= 0 then iondisk[inum] = true end
+			inum = inum + 1
+			
+			subnum = subnum + 8
+			
+			s = s:sub(2)
+		end
+	end
+	
+	return iondisk
 end
 
 function Ext3:balloc(bnum)
