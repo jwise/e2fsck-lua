@@ -27,7 +27,7 @@ function Fsck.pass1(e)
 		local f = ino:file()
 		while true do
 			local pos = f:seek()
-			local de = f:readdir()
+			local de = f:readdir(true)
 			if de == nil then break end
 			
 			local name,namei = de.name, de.inode
@@ -66,6 +66,55 @@ function Fsck.pass1(e)
 	verify(Ext3.inodes.ROOT)
 end
 
+function Fsck.linki(e, lostfound, inum)
+	local ino = e:inode(lostfound)
+	ino.flags = bit.band(ino.flags, bit.bnot(0x1000)) -- Clear the btree bit.
+	local f = ino:file()
+	local iname = "#"..inum
+	local ilen = 8 + iname:len() + 4 - (iname:len() % 4)
+	local newde = {
+		inode = inum,
+		rec_len = ilen,
+		name_len = iname:len(),
+		file_type = 0,
+		name = iname,
+		padding = string.rep(string.char(0), 4 - (iname:len() % 4))
+	}
+	
+	-- Case on the filetype.
+	    if ino.mode.IFIFO  then newde.file_type = 5
+	elseif ino.mode.IFCHR  then newde.file_type = 3
+	elseif ino.mode.IFDIR  then newde.file_type = 2
+	elseif ino.mode.IFBLK  then newde.file_type = 4
+	elseif ino.mode.IFREG  then newde.file_type = 1
+	elseif ino.mode.IFLNK  then newde.file_type = 7
+	elseif ino.mode.IFSOCK then newde.file_type = 6
+	else                        newde.file_type = 0
+	end
+	
+	while true do
+		local pos = f:seek()
+		local de = f:readdir(true)
+		if not de then error("not enough space in lost+found to link an inode") end
+		
+		if de.name_len ~= 0 and de.name:byte(1) ~= 0 then
+		elseif de.rec_len < (newde.rec_len + 8) then
+		else
+			-- It's free, and there's enough space.
+			de.rec_len = de.rec_len - newde.rec_len
+			assert((de.rec_len % 4) == 0)
+			de.name_len = 0
+			de.name = ""
+			de.padding = string.rep(string.char(0), de.rec_len - 8)
+			
+			f:writedir(newde)
+			f:writedir(de)
+			
+			break
+		end
+	end
+end
+
 function Fsck.pass2(e)
 	vprint"Pass 2: Inode allocation bitmap"
 	
@@ -101,16 +150,23 @@ function Fsck.pass2(e)
 	
 	for k,v in pairs(ifound) do
 		if not iondisk[k] and k >= Ext3.inodes.FIRST_GOOD then
-			print("inode "..k.." in memory, but not marked as allocated; repaired")
 			e:ialloc(k, true)
+			
+			print("inode "..k.." in memory, but not marked as allocated; repaired")
 		end
 	end
 	
 	for k,v in pairs(iondisk) do
 		if not ifound[k] and k >= Ext3.inodes.FIRST_GOOD then
-			error("inode "..k.." on disk, but not found in semantic tree")
+			Fsck.linki(e, lostfound, k)
+			
+			print("inode "..k.." on disk, but not found in semantic tree; repaired (restarting fsck)")
+			
+			return true
 		end
 	end
+	
+	return false
 end
 
 function Fsck.pass3(e)
@@ -237,20 +293,26 @@ function Fsck.pass4(e)
 	
 	for k,v in pairs(bfound) do
 		if not bondisk[k] then
-			error("block "..k.." in memory, but not marked as allocated")
+			e:balloc(k, true)
+			
+			print("block "..k.." in memory, but not marked as allocated; repaired")
 		end
 	end
 	
 	for k,v in pairs(bondisk) do
 		if not bfound[k] and k < e.blocks_count then
-			print("block "..k.." on disk, but not found in semantic tree")
+			e:balloc(k, false)
+			
+			print("block "..k.." on disk, but not found in semantic tree; repaired")
 		end
 	end
 end
 
 function Fsck.fsck(e)
 	Fsck.pass1(e)
-	Fsck.pass2(e)
+	if Fsck.pass2(e) then
+		return Fsck.fsck(e)
+	end
 	Fsck.pass3(e)
 	Fsck.pass4(e)
 	

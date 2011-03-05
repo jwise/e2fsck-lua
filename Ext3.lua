@@ -328,8 +328,10 @@ function Ext3:iall(inum)
 	return iondisk
 end
 
-function Ext3:balloc(bnum)
+function Ext3:balloc(bnum, val)
 	assert(bnum >= 0 and bnum < self.blocks_count)
+	
+	bnum = bnum - self.startblock
 
 	local bgn = bnum / self.blocks_per_group
 	local bstart = self.blockgroups[bgn].block_bitmap
@@ -339,9 +341,27 @@ function Ext3:balloc(bnum)
 	local bbit = bofs % 8
 
 	local raw = self:readblock(bblock)
-	local b = bit.band(raw:byte(bbyte+1), bit.lshift(1, bbit))
-
-	return b ~= 0
+	if val == nil then
+		local b = bit.band(raw:byte(bbyte+1), bit.lshift(1, bbit))
+	
+		return b ~= 0
+	elseif val == true then
+		local b = bit.bor(raw:byte(bbyte+1), bit.lshift(1, bbit))
+		local bs = string.char(b)
+		local newraw = strreplace(raw, bs, bbyte)
+		
+		self:writeblock(bblock, newraw)
+		
+		return true
+	elseif val == false then
+		local b = bit.band(raw:byte(bbyte+1), bit.bnot(bit.lshift(1, bbit)))
+		local bs = string.char(b)
+		local newraw = strreplace(raw, bs, bbyte)
+		
+		self:writeblock(bblock, newraw)
+		
+		return false
+	end
 end
 
 function Ext3:ball(inum)

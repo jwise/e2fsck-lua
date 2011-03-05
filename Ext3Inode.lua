@@ -302,17 +302,17 @@ function Ext3.File:writedir(de)
 	self:write(d)
 end
 
-function Ext3.File:readdir()
+function Ext3.File:readdir(nomatterwhat)
 	if self.size == self.pos then
 		return nil
 	end
 	
 	local d = serial.read.fstruct(self, Ext3.File.dirent)
-	if d.name_len == 0 then
+	if d.name_len == 0 and not nomatterwhat then
 		return nil
 	end
 	
-	if d.name:byte(1) == 0 then
+	if d.name:byte(1) == 0 and not nomatterwhat then
 		return nil
 	end
 	
