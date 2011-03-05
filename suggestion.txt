@@ -1,0 +1,17 @@
+Enjoyed:
+
+  intriguing challenge; removed much of the magic from ext2 inodes and
+    lost+found reconnection.
+
+Anti-enjoyed / suggestion:
+
+  It seemed like I wrote a lot of driver code for a very small "user"
+  application; the Fsck driver itself was 330 lines, whereas the rest of the
+  support code ended up being another 1000 lines...  it seemed like a lot of
+  support code for little actual application code.  It would be nice to
+  write, say, a FUSE driver for it, or more substantial of a fsck (checking
+  and repairing more different types of inconsistencies that can arise in
+  ext2/ext3.)
+
+Remember to also read the README.
+
