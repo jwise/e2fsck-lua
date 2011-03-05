@@ -229,7 +229,7 @@ function Ext3.File:read(bytes)
 		if block == nil then
 			ld = string.rep(string.char(0), self.fs.block_size)
 		else
-			ld = self.fs:readblock(self.i:block(self.pos / self.fs.block_size))
+			ld = self.fs:readblock(block)
 		end
 		ld = ld:sub((self.pos % self.fs.block_size) + 1,
 		            (self.pos + nbytes - 1) % self.fs.block_size + 1)
@@ -239,6 +239,40 @@ function Ext3.File:read(bytes)
 		bytes = bytes - nbytes
 	end
 	return d
+end
+
+function Ext3.File:write(s)
+	while s ~= "" do
+		local blockofs = self.pos % self.fs.block_size
+		local blockleft = self.fs.block_size - blockofs
+		local szleft = self.size - self.pos
+		local nbytes = s:len()
+		
+		if nbytes > blockleft then nbytes = blockleft end
+		if nbytes > szleft then nbytes = szleft end
+		
+		if nbytes == 0 then
+			error("Ext3.File:write cannot yet grow file")
+		end
+		
+		local block = self.i:block(self.pos / self.fs.block_size)
+		if block == nil then
+			error("Ext3.File:write cannot yet fill sparse blocks")
+		end
+		
+		local ld = self.fs:readblock(block)
+		local strim = s:sub(1, nbytes)
+		s = s:sub(nbytes+1)
+		
+		-- Patch together the new data.
+		local blkdat = ld:sub(1, self.pos % self.fs.block_size) ..
+		               strim ..
+		               ld:sub(self.pos % self.fs.block_size + nbytes + 1)
+		assert(blkdat:len() == self.fs.block_size)
+		self.fs:writeblock(block, blkdat)
+		
+		self.pos = self.pos + nbytes
+	end
 end
 
 -- For compatibility with the 'serial' stream interface.

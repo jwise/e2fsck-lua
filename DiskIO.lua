@@ -16,7 +16,7 @@ function DiskIO:new(o)
 end
 
 function DiskIO:open()
-	self.fd = self.fd or assert(io.open(self.path, "rb"))
+	self.fd = self.fd or assert(io.open(self.path, "r+b"))
 	
 	return self
 end
