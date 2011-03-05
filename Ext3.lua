@@ -3,6 +3,8 @@ local serial = require"serial"
 
 Ext3 = {}
 
+require"Ext3Inode"
+
 Ext3.MAGIC_NUMBER = 0xEF53
 Ext3.inodes = {}
 Ext3.inodes.BAD = 1
@@ -116,7 +118,7 @@ Ext3.formats.inode = {
 	{'blocks', 'uint32', 'le'},
 	{'flags', 'uint32', 'le'},
 	{'osd1', 'uint32', 'le'},
-	{'block', 'array', 15, 'uint32', 'le'},
+	{'blocks', 'array', 15, 'uint32', 'le'},
 	{'generation', 'uint32', 'le'},
 	{'file_acl', 'uint32', 'le'},
 	{'dir_acl', 'uint32', 'le'},
@@ -204,13 +206,17 @@ function Ext3:inode(inum)
 	
 	local bgn = (inum - 1) / self.inodes_per_group
 	local istart = self.blockgroups[bgn].inode_table
-	local iofs = ((inum - 1) % self.inodes_per_group) * Ext3.formats.inode.length
+	local iofs = ((inum - 1) % self.inodes_per_group) * self.inode_size
 	local iblock = istart + (iofs / self.block_size)
+
+	local iraw = self:readblock(iblock):sub((iofs % self.block_size) + 1)
+	local idata = assert(serial.read.struct(serial.buffer(iraw), Ext3.formats.inode))
 	
-	local iraw = self:readblock(iblock):sub(iofs + 1)
-	local idata = serial.read.struct(serial.buffer(iraw), Ext3.formats.inode)
+	idata.inum = inum
+	idata.disk = self.disk
+	idata.fs = self
 	
-	return idata
+	return Ext3.Inode:new(idata)
 end
 
 function Ext3:ialloc(inum)
@@ -240,7 +246,6 @@ function Ext3:balloc(bnum)
 	local bbit = bofs % 8
 
 	local raw = self:readblock(bblock)
---	print("checking allocation of "..bnum..", lives in bgn "..bgn..", phys block "..bblock..", byte "..bbyte..", bit "..bbit..", byte is "..raw:byte(bbyte+1))
 	local b = bit.band(raw:byte(bbyte+1), bit.lshift(1, bbit))
 
 	return b ~= 0
