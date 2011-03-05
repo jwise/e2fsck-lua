@@ -1,3 +1,9 @@
+--
+-- Ext3.lua
+-- Main filesystem access routines
+-- myfsck, Joshua Wise
+--
+
 local bit = require"bit"
 local serial = require"serial"
 

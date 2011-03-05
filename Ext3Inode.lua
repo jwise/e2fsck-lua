@@ -1,3 +1,9 @@
+--
+-- Ext3Inode.lua
+-- Filesystem file/inode/directory routines
+-- myfsck, Joshua Wise
+--
+
 local bit = require"bit"
 local serial = require"serial"
 

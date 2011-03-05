@@ -1,0 +1,58 @@
+README for myfsck
+Joshua Wise, 2011-03-05
+-----------------------
+
+This myfsck is probably somewhat unusual, in that it is written in the Lua
+programming language.  I found that Lua provided a level of facility in
+creating large datastructures that is unmatched in languages that require
+manual memory management; the dynamic type system provided an easy way to
+respond in an agile fashion to changes in the requirements for data storage. 
+I feel that a striking example of the beauty of this comes in the
+implementation of pass 3, seen in Fsck.lua as Fsck.pass3(); the algorithm is
+clearly and crisply elucidated in working code.
+
+The following files comprise this project:
+
+  native/ - The Lua runtime (modified to have Number be int64_t) and
+            associated support libraries.
+
+  myfsck - Shell wrapper to invoke myfsck.lua.
+
+  myfsck.lua - Main command line processor; driver for the partition printer
+               and the fsck itself.
+
+  Fsck.lua - Logic to verify and repair the filesystem (is this not what we
+             came for?)
+
+  Ext3Inode.lua - High level file and inode related tasks on top of the raw
+                  Ext3 driver.
+
+  Ext3.lua - Superblock and block table serialization and location logic.
+
+  Partition.lua - Partition table wrappers around DiskIO.
+
+  DiskIO.lua - Wrappers similar to readwrite.c.
+
+The Ext3 name was chosen, in part, because I kept typing it, and in part
+because the driver is smart enough to "know what it doesn't know" -- i.e.,
+the RO_COMPAT flags have the Ext3 names, not just the Ext2 names.  At this
+time, the code doesn't bail out when it sees a RO_COMPAT flag that it can't
+handle.
+
+I would be remiss to go without citing my previous work on this subject,
+e3lua [1].  This work builds on the ideas in my previous work, but very
+minimal code was copied; only the serialization and deserialization logic
+was directly lifted from e3lua.  (This seems fair, since if this were to be
+done in C, then the logic would already be provided, as in ext2_fs.h.)  The
+rest of the code was substantially redesigned; in particular, the goal was
+added to be able to write to the partition, and to look for different
+failure modes than the specific data loss incident that e3lua was built to
+recover from.
+
+I would write more, but my wrists are burnt out and I really want to go
+skiing.  Hopefully this implementation provides an interesting perspective
+on the problemspace, and various methods for writing the checker.  Enjoy!
+
+joshua
+
+[1] https://github.com/jwise/e3lua

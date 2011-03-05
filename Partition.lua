@@ -1,3 +1,9 @@
+--
+-- Partition.lua
+-- Partition table wrapper around disk-like objects
+-- myfsck, Joshua Wise
+--
+
 local bit = require"bit"
 local serial = require"serial"
 

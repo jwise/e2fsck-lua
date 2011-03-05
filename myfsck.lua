@@ -1,3 +1,9 @@
+--
+-- myfsck.lua
+-- Main entry point
+-- myfsck, Joshua Wise
+--
+
 require"DiskIO"
 require"Partition"
 require"Ext3"

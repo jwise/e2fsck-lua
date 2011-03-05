@@ -1,3 +1,9 @@
+--
+-- Fsck.lua
+-- Filesystem checking logic
+-- myfsck, Joshua Wise
+--
+
 require"Verbose"
 
 Fsck = {}

@@ -1,4 +1,10 @@
-assert(0x7FFFFFFFFFFFFFFF ~= 0x7FFFFFFFFFFFFFFE, "IO.lua requires at least 64-bit numbers")
+--
+-- DiskIO.lua
+-- Raw sector I/O routines
+-- myfsck, Joshua Wise
+--
+
+assert(0x7FFFFFFFFFFFFFFF ~= 0x7FFFFFFFFFFFFFFE, "DiskIO.lua requires at least 64-bit numbers")
 
 local bit = require"bit"
 
